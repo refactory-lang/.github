@@ -1,8 +1,11 @@
-# refactory-lang
+<p align="center">
+  <img src="https://raw.githubusercontent.com/refactory-lang/.github/main/assets/refactory-logo.svg" alt="Refactory" width="400">
+</p>
 
-**Refactory** — Semantic Profile-Guided Code Generation.
-
-Write reviewable Python or TypeScript. Ship production Rust.
+<p align="center">
+  <strong>Semantic Profile-Guided Code Generation</strong><br>
+  Write reviewable Python or TypeScript. Ship production Rust.
+</p>
 
 ## Repositories
 
