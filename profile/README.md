@@ -8,30 +8,28 @@ Write reviewable Python or TypeScript. Ship production Rust.
 
 ### Translation Pipelines
 
-| Repository | What | Stages | Status |
-|-----------|------|--------|--------|
-| [`python-to-rust`](https://github.com/refactory-lang/python-to-rust) | Python → Rust | Tier 0 normalize → Tier 0.5 shadow-rewrite → Tiers 1–3 translate → verify | Phase 0 complete |
-| [`typescript-to-rust`](https://github.com/refactory-lang/typescript-to-rust) | TypeScript → Rust | Tier 0 normalize → Tier 0.5 shadow-rewrite → Tiers 1–3 translate → verify | Planned (Phase 1) |
-| [`core`](https://github.com/refactory-lang/core) | Shared transform utilities | — | Planned |
+| Repository | Description | Status |
+|-----------|-------------|--------|
+| [`python-to-rust`](https://github.com/refactory-lang/python-to-rust) | Python → Rust translation pipeline (normalize → shadow-rewrite → transforms → verify) | Phase 0 |
+| [`typescript-to-rust`](https://github.com/refactory-lang/typescript-to-rust) | TypeScript → Rust translation pipeline | Planned |
+| [`core`](https://github.com/refactory-lang/core) | Shared transform utilities (type mapping, case conversion, struct emission) | Planned |
 
 ### Shadow Libraries
 
-| Repository | What | Status |
-|-----------|------|--------|
-| [`shadows`](https://github.com/refactory-lang/shadows) | Python shadow libraries — 19 PyO3/maturin crates (Cargo workspace) + import hook | Phase 0.5 |
-| [`shadows-ts`](https://github.com/refactory-lang/shadows-ts) | TypeScript shadow libraries — napi-rs | Planned (Phase 1) |
+| Repository | Description | Status |
+|-----------|-------------|--------|
+| [`shadows-python`](https://github.com/refactory-lang/shadows-python) | 19 PyO3/maturin crates (Cargo workspace) + import hook — API-identical Python wrappers around Rust crates | Phase 0.5 |
+| [`shadows-ts`](https://github.com/refactory-lang/shadows-ts) | TypeScript shadow libraries (napi-rs) | Planned |
 
-### Product SDKs
+### Shared
 
-| Repository | What | Status |
-|-----------|------|--------|
-| [`ferrum-sdk`](https://github.com/refactory-lang/ferrum-sdk) | Ferrum EDM Python Component SDK (PyO3 bindings) | Planned (Phase 1) |
-| [`sinter-sdk`](https://github.com/refactory-lang/sinter-sdk) | Sinter Step SDKs (Python + TypeScript) | Planned (Phase 1) |
-| [`sinter-n8n-helpers`](https://github.com/refactory-lang/sinter-n8n-helpers) | n8n IExecuteFunctions shadow library | Planned (Phase 1) |
+| Repository | Description |
+|-----------|-------------|
+| [`refactory-template`](https://github.com/refactory-lang/refactory-template) | Common config template (speckit, Claude/agents, MCP) for all repos |
 
 ## Pipeline Architecture
 
-Each translation pipeline (`python-to-rust`, `typescript-to-rust`) is a monorepo containing three composable stages:
+Each translation pipeline is a monorepo with three composable stages:
 
 ```
           Developer writes               Pipeline produces
@@ -48,25 +46,27 @@ Each translation pipeline (`python-to-rust`, `typescript-to-rust`) is a monorepo
 │  dataclass→frozen  │  │  ...19 libraries   │  │                    │  │          │
 └────────────────────┘  └────────────────────┘  └────────────────────┘  └──────────┘
          │                        │
-         │     shadows repo       │
+         │  shadows-python repo   │
          │  (PyO3 runtime libs)   │
          └────────┬───────────────┘
                   ▼
         ┌────────────────────┐
-        │  refactory-shadows │
+        │  shadows-python    │
         │  Cargo workspace   │
         │  19 PyO3 crates    │
         │  import hook       │
         └────────────────────┘
 ```
 
-## Products
+The `shadows-python` repo provides runtime PyO3 libraries that shadow rewrite rules point at. The import hook in `shadows-python/hook/` activates during development/testing so developers write vanilla Python against real Rust implementations.
 
-| Product | Source Language | Profile | Pipeline Repo |
-|---------|---------------|---------|---------------|
-| **Ferrum EDM** | Python | Python-as-Rust | `python-to-rust` |
-| **Sinter** | Python + TypeScript | Both profiles | Both repos |
-| **Refactory** (standalone) | Any | Any registered | Any pipeline repo |
+## How It Works
+
+1. **Profile** — A strict subset of the source language (e.g. "Python-as-Rust") that makes code structurally translatable. Enforced by ast-grep rules.
+2. **Normalize** (Tier 0) — Rewrite idiomatic patterns into profile-compliant forms (`try/except` → `Result`, `Optional` → `Maybe`, etc.)
+3. **Shadow Rewrite** (Tier 0.5) — Replace stdlib imports with shadow library paths that map 1:1 to Rust crates
+4. **Transform** (Tiers 1–3) — Deterministic AST transforms (T1: types/structs, T2: modules/control), then LLM-assisted (T3: traits/lifetimes)
+5. **Verify** — `cargo build`, `clippy`, `cargo test` on the output
 
 ## License
 
