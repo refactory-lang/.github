@@ -21,6 +21,7 @@
 | [`typescript-to-rust`](https://github.com/refactory-lang/typescript-to-rust) | TypeScript → Rust transformation pipeline | Milestone 1 |
 | [`core`](https://github.com/refactory-lang/core) | Shared utilities + Stage 3 Rust→Rust resolve (`@refactory/core`) | Milestone 1 |
 | [`rust-ir`](https://github.com/refactory-lang/rust-ir) | Typed Rust IR builder for JSSG transforms — grammar-faithful, render-then-validate | Milestone 1 |
+| [`python-annotate`](https://github.com/refactory-lang/python-annotate) | Step 2 Type Infer CLI — pyright → annotate → mypy --strict (Python-specific) | Milestone 1 |
 
 ### Shadow Libraries
 
