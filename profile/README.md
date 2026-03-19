@@ -94,7 +94,7 @@ flowchart LR
 3. **Step 3: Translate** — Convert profile-compliant source to Rust
    - **3.1 Translate-Syntax** — Deterministic syntax mapping via JSSG (types, structs, functions, imports)
    - **3.2 Translate-Structural** — Structural transforms (impl blocks, Drop/RAII, iterators, modules)
-   - **3.3 Translate-LLM** — LLM-assisted Rust→Rust pass for constructs with no source representation (lifetimes, trait bounds, async). Resolves `todo!("t3:*")` stubs.
+   - **3.3 Translate-LLM** — LLM-assisted Rust→Rust pass for constructs with no source representation (lifetimes, trait bounds, async). Resolves `todo!("s3:*")` stubs.
 4. **Step 4: Verify** — `cargo build`, `cargo clippy`, `cargo test` on the formatted output
 
 ## Stage Promotion
