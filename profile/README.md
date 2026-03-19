@@ -13,29 +13,29 @@
 
 ## Repositories
 
-### Translation Pipelines
+### Transformation Pipeline
 
 | Repository | Description | Status |
 |-----------|-------------|--------|
-| [`python-to-rust`](https://github.com/refactory-lang/python-to-rust) | Python → Rust translation pipeline (8-step: normalize → validate → T1 → T2 → T3 → format → verify) | Phase 1 |
-| [`typescript-to-rust`](https://github.com/refactory-lang/typescript-to-rust) | TypeScript → Rust translation pipeline | Phase 1 |
-| [`core`](https://github.com/refactory-lang/core) | Shared transform utilities + Tier 3 Rust→Rust resolve (`@refactory/core`) | Phase 1 |
-| [`rust-ir`](https://github.com/refactory-lang/rust-ir) | Typed Rust IR builder for JSSG transforms — grammar-faithful, render-then-validate | Phase 1 |
+| [`python-to-rust`](https://github.com/refactory-lang/python-to-rust) | Python → Rust transformation pipeline (4-step: normalize → validate → translate → verify) | Milestone 1 |
+| [`typescript-to-rust`](https://github.com/refactory-lang/typescript-to-rust) | TypeScript → Rust transformation pipeline | Milestone 1 |
+| [`core`](https://github.com/refactory-lang/core) | Shared utilities + Stage 3 Rust→Rust resolve (`@refactory/core`) | Milestone 1 |
+| [`rust-ir`](https://github.com/refactory-lang/rust-ir) | Typed Rust IR builder for JSSG transforms — grammar-faithful, render-then-validate | Milestone 1 |
 
 ### Shadow Libraries
 
 | Repository | Description | Status |
 |-----------|-------------|--------|
-| [`shadows-python`](https://github.com/refactory-lang/shadows-python) | 19 PyO3/maturin crates (Cargo workspace) + import hook — API-identical Python wrappers around Rust crates | Phase 0.5 |
-| [`shadows-ts`](https://github.com/refactory-lang/shadows-ts) | TypeScript shadow libraries (napi-rs) | Phase 1 |
-| [`sinter-n8n-helpers`](https://github.com/refactory-lang/sinter-n8n-helpers) | n8n IExecuteFunctions shadow — maps ~30-40 n8n helpers to Sinter equivalents | Phase 1 |
+| [`shadows-python`](https://github.com/refactory-lang/shadows-python) | 19 PyO3/maturin crates (Cargo workspace) + import hook — API-identical Python wrappers around Rust crates | Milestone 0.5 |
+| [`shadows-ts`](https://github.com/refactory-lang/shadows-ts) | TypeScript shadow libraries (napi-rs) | Milestone 1 |
+| [`sinter-n8n-helpers`](https://github.com/refactory-lang/sinter-n8n-helpers) | n8n IExecuteFunctions shadow — maps ~30-40 n8n helpers to Sinter equivalents | Milestone 1 |
 
 ### Product SDKs
 
 | Repository | Description | Status |
 |-----------|-------------|--------|
-| [`ferrum-sdk`](https://github.com/refactory-lang/ferrum-sdk) | Ferrum Python Component SDK — validate → test → translate → compile | Phase 2 |
-| [`sinter-sdk`](https://github.com/refactory-lang/sinter-sdk) | Sinter Step SDKs (Python + TypeScript) — workflow step protocol | Phase 2 |
+| [`ferrum-sdk`](https://github.com/refactory-lang/ferrum-sdk) | Ferrum Python Component SDK — validate → test → translate → compile | Milestone 2 |
+| [`sinter-sdk`](https://github.com/refactory-lang/sinter-sdk) | Sinter Step SDKs (Python + TypeScript) — workflow step protocol | Milestone 2 |
 
 ### Shared
 
@@ -45,38 +45,40 @@
 
 ## Pipeline Architecture
 
+The transformation pipeline has 4 canonical steps, with stages within each:
+
 ```mermaid
 flowchart LR
     SRC([Source Code\nPython / TypeScript])
 
-    subgraph NORM [Normalize]
+    subgraph S1 ["Step 1: Normalize"]
         direction TB
-        N_DET[Normalize-Det\ntry/except → Result\nOptional → Maybe\nclass → interface]
-        N_LLM[Normalize-LLM\nstateful mixins\ncomplex patterns]
+        N_DET["1.1 Normalize-Det\ntry/except → Result\nOptional → Maybe\nclass → interface"]
+        N_LLM["1.2 Normalize-LLM\nstateful mixins\ncomplex patterns"]
         N_DET --> N_LLM
     end
 
-    subgraph VAL [Validate]
-        VALID[Profile Validator\nast-grep rules\npytest + shadows]
+    subgraph S2 ["Step 2: Validate"]
+        VALID["2.0 Profile Validator\nast-grep rules\npytest + shadows"]
     end
 
-    subgraph TRANS [Transform]
+    subgraph S3 ["Step 3: Translate"]
         direction TB
-        T1[Tier 1 — Syntax\ntypes, structs, functions\nerror handling, imports]
-        T2[Tier 2 — Structural\nimpl blocks, Drop/RAII\niterators, modules]
-        T3[Tier 3 — LLM\nRust→Rust only\nlifetimes, trait bounds\nasync patterns]
-        FMT[cargo fmt]
+        T1["3.1 Translate-Syntax\ntypes, structs, functions\nerror handling, imports"]
+        T2["3.2 Translate-Structural\nimpl blocks, Drop/RAII\niterators, modules"]
+        T3["3.3 Translate-LLM\nRust→Rust only\nlifetimes, trait bounds\nasync patterns"]
+        FMT["cargo fmt"]
         T1 --> T2 --> T3 --> FMT
     end
 
-    subgraph VER [Verify]
-        CHECK[cargo build\ncargo clippy\ncargo test]
+    subgraph S4 ["Step 4: Verify"]
+        CHECK["4.0 Verify\ncargo build\ncargo clippy\ncargo test"]
     end
 
-    SRC --> NORM --> VAL --> TRANS --> VER --> OUT([Rust Output])
+    SRC --> S1 --> S2 --> S3 --> S4 --> OUT([Rust Output])
 
-    VER -.->|stub failure| T3
-    T3 -.->|structured output| PROMO([Tier Promotion\nFeedback Loop])
+    S4 -.->|stub failure| T3
+    T3 -.->|structured output| PROMO([Stage Promotion\nFeedback Loop])
 
     style SRC fill:#dbeafe,stroke:#3b82f6
     style OUT fill:#dcfce7,stroke:#22c55e
@@ -85,26 +87,29 @@ flowchart LR
 
 ## How It Works
 
-1. **Profile** — A strict subset of the source language (e.g. "Python-as-Rust", "TypeScript-as-Rust") that makes code structurally translatable. Enforced by ast-grep rules.
-2. **Normalize-Det** — Deterministic rewrites: idiomatic patterns → profile-compliant forms (`try/except` → `Result`, `throw` → `Err`, etc.)
-3. **Normalize-LLM** — LLM-assisted normalization for patterns too complex for deterministic rules (class → readonly interface, complex control flow)
-4. **Validate** — ast-grep profile validator confirms all code is profile-compliant before translation
-5. **Transform T1/T2** — Deterministic AST transforms via JSSG (T1: types/structs/syntax, T2: modules/control/generators)
-6. **Transform T3** — LLM-assisted Rust→Rust pass for constructs with no Python/TS representation (lifetimes, trait bounds, async patterns). Resolves `todo!("t3:*")` stubs.
-7. **Verify** — `cargo build`, `cargo clippy`, `cargo test` on the formatted output
+1. **Step 1: Normalize** — Rewrite idiomatic source to profile-compliant form
+   - **1.1 Normalize-Det** — Deterministic rewrites (`try/except` → `Result`, `throw` → `Err`, etc.)
+   - **1.2 Normalize-LLM** — LLM-assisted normalization for complex patterns (class → readonly interface)
+2. **Step 2: Validate** — ast-grep profile validator confirms all code is profile-compliant before translation
+3. **Step 3: Translate** — Convert profile-compliant source to Rust
+   - **3.1 Translate-Syntax** — Deterministic syntax mapping via JSSG (types, structs, functions, imports)
+   - **3.2 Translate-Structural** — Structural transforms (impl blocks, Drop/RAII, iterators, modules)
+   - **3.3 Translate-LLM** — LLM-assisted Rust→Rust pass for constructs with no source representation (lifetimes, trait bounds, async). Resolves `todo!("t3:*")` stubs.
+4. **Step 4: Verify** — `cargo build`, `cargo clippy`, `cargo test` on the formatted output
 
-## Tier Promotion
+## Stage Promotion
 
-The **Tier Promotion Feedback Loop** continuously shrinks the LLM-dependent surface: T3 structured outputs are clustered by AST fingerprint, candidate JSSG rules are generated, validated through CI, and surfaced as PRs. Approved rules become permanent T1/T2 transforms.
+The **Stage Promotion Feedback Loop** continuously shrinks the LLM-dependent surface: Stage 3 structured outputs are clustered by AST fingerprint, candidate JSSG rules are generated, validated through CI, and surfaced as PRs. Approved rules become permanent Stage 1/2 transforms.
 
 ## Terminology
 
-| Term | Meaning |
-|:-----|:--------|
-| **Phase** (0–4) | Project timeline milestone |
-| **Track** (A/B/C) | Parallel work stream within a Phase |
-| **Tier** (1/2/3) | Translation pipeline stage |
-| **Priority** (A–D) | Shadow library implementation order |
+| Term | Meaning | Example |
+|:-----|:--------|:--------|
+| **Milestone** (0–4) | Project timeline milestone | Milestone 1: Multi-Language Foundation |
+| **Track** (A/B/C) | Parallel work stream within a Milestone | Milestone 1 Track A: Python |
+| **Step** (1–4) | Pipeline step | Step 3: Translate |
+| **Stage** (1/2/3) | Sub-step within Translate | Stage 1 (Step 3.1): Syntax |
+| **Priority** (A–D) | Shadow library implementation order | Priority A: Core shadows |
 
 ## License
 
