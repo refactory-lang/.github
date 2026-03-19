@@ -43,6 +43,7 @@
 | Repository | Description |
 |-----------|-------------|
 | [`refactory-template`](https://github.com/refactory-lang/refactory-template) | Common config template (speckit, Claude/agents, MCP) for all repos |
+| [`config-typescript`](https://github.com/refactory-lang/config-typescript) | Shared TypeScript toolchain config — tsconfig, oxlint, oxfmt base configs |
 
 ## Pipeline Architecture
 
