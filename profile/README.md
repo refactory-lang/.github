@@ -17,7 +17,7 @@
 
 | Repository | Description | Status |
 |-----------|-------------|--------|
-| [`python-to-rust`](https://github.com/refactory-lang/python-to-rust) | Python → Rust transformation pipeline (4-step: normalize → validate → translate → verify) | Milestone 1 |
+| [`python-to-rust`](https://github.com/refactory-lang/python-to-rust) | Python → Rust transformation pipeline (5-step: normalize → type-infer → validate → translate → verify) | Milestone 1 |
 | [`typescript-to-rust`](https://github.com/refactory-lang/typescript-to-rust) | TypeScript → Rust transformation pipeline | Milestone 1 |
 | [`core`](https://github.com/refactory-lang/core) | Shared utilities + Stage 3 Rust→Rust resolve (`@refactory/core`) | Milestone 1 |
 | [`rust-ir`](https://github.com/refactory-lang/rust-ir) | Typed Rust IR builder for JSSG transforms — grammar-faithful, render-then-validate | Milestone 1 |
@@ -45,7 +45,7 @@
 
 ## Pipeline Architecture
 
-The transformation pipeline has 4 canonical steps, with stages within each:
+The transformation pipeline has 5 canonical steps, with stages within each:
 
 ```mermaid
 flowchart LR
@@ -58,26 +58,30 @@ flowchart LR
         N_DET --> N_LLM
     end
 
-    subgraph S2 ["Step 2: Validate"]
-        VALID["2.0 Profile Validator\nast-grep rules\npytest + shadows"]
+    subgraph S2 ["Step 2: Type Infer"]
+        TINFER["2.0 Type Infer\npyright → annotate → mypy"]
     end
 
-    subgraph S3 ["Step 3: Translate"]
+    subgraph S3 ["Step 3: Validate"]
+        VALID["3.0 Profile Validator\nast-grep rules\npytest + shadows"]
+    end
+
+    subgraph S4 ["Step 4: Translate"]
         direction TB
-        T1["3.1 Translate-Syntax\ntypes, structs, functions\nerror handling, imports"]
-        T2["3.2 Translate-Structural\nimpl blocks, Drop/RAII\niterators, modules"]
-        T3["3.3 Translate-LLM\nRust→Rust only\nlifetimes, trait bounds\nasync patterns"]
+        T1["4.1 Translate-Syntax\ntypes, structs, functions\nerror handling, imports"]
+        T2["4.2 Translate-Structural\nimpl blocks, Drop/RAII\niterators, modules"]
+        T3["4.3 Translate-LLM\nRust→Rust only\nlifetimes, trait bounds\nasync patterns"]
         FMT["cargo fmt"]
         T1 --> T2 --> T3 --> FMT
     end
 
-    subgraph S4 ["Step 4: Verify"]
-        CHECK["4.0 Verify\ncargo build\ncargo clippy\ncargo test"]
+    subgraph S5 ["Step 5: Verify"]
+        CHECK["5.0 Verify\ncargo build\ncargo clippy\ncargo test"]
     end
 
-    SRC --> S1 --> S2 --> S3 --> S4 --> OUT([Rust Output])
+    SRC --> S1 --> S2 --> S3 --> S4 --> S5 --> OUT([Rust Output])
 
-    S4 -.->|stub failure| T3
+    S5 -.->|stub failure| T3
     T3 -.->|structured output| PROMO([Stage Promotion\nFeedback Loop])
 
     style SRC fill:#dbeafe,stroke:#3b82f6
@@ -90,12 +94,13 @@ flowchart LR
 1. **Step 1: Normalize** — Rewrite idiomatic source to profile-compliant form
    - **1.1 Normalize-Det** — Deterministic rewrites (`try/except` → `Result`, `throw` → `Err`, etc.)
    - **1.2 Normalize-LLM** — LLM-assisted normalization for complex patterns (class → readonly interface)
-2. **Step 2: Validate** — ast-grep profile validator confirms all code is profile-compliant before translation
-3. **Step 3: Translate** — Convert profile-compliant source to Rust
-   - **3.1 Translate-Syntax** — Deterministic syntax mapping via JSSG (types, structs, functions, imports)
-   - **3.2 Translate-Structural** — Structural transforms (impl blocks, Drop/RAII, iterators, modules)
-   - **3.3 Translate-LLM** — LLM-assisted Rust→Rust pass for constructs with no source representation (lifetimes, trait bounds, async). Resolves `todo!("s3:*")` stubs.
-4. **Step 4: Verify** — `cargo build`, `cargo clippy`, `cargo test` on the formatted output
+2. **Step 2: Type Infer** — Run `pyright` → `refactory-annotate` → `mypy --strict` to ensure full type coverage before validation
+3. **Step 3: Validate** — ast-grep profile validator confirms all code is profile-compliant before translation
+4. **Step 4: Translate** — Convert profile-compliant source to Rust
+   - **4.1 Translate-Syntax** — Deterministic syntax mapping via JSSG (types, structs, functions, imports)
+   - **4.2 Translate-Structural** — Structural transforms (impl blocks, Drop/RAII, iterators, modules)
+   - **4.3 Translate-LLM** — LLM-assisted Rust→Rust pass for constructs with no source representation (lifetimes, trait bounds, async). Resolves `todo!("s3:*")` stubs.
+5. **Step 5: Verify** — `cargo build`, `cargo clippy`, `cargo test` on the formatted output
 
 ## Stage Promotion
 
@@ -107,8 +112,8 @@ The **Stage Promotion Feedback Loop** continuously shrinks the LLM-dependent sur
 |:-----|:--------|:--------|
 | **Milestone** (0–4) | Project timeline milestone | Milestone 1: Multi-Language Foundation |
 | **Track** (A/B/C) | Parallel work stream within a Milestone | Milestone 1 Track A: Python |
-| **Step** (1–4) | Pipeline step | Step 3: Translate |
-| **Stage** (1/2/3) | Sub-step within Translate | Stage 1 (Step 3.1): Syntax |
+| **Step** (1–5) | Pipeline step | Step 4: Translate |
+| **Stage** (1/2/3) | Sub-step within Translate | Stage 1 (Step 4.1): Syntax |
 | **Priority** (A–D) | Shadow library implementation order | Priority A: Core shadows |
 
 ## License
