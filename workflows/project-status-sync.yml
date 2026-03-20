@@ -1,0 +1,228 @@
+# Bidirectional sync: Project Board → Issue
+#
+# When a project item's Status field changes:
+#   - "Ready to Spec" → apply 'ready-to-spec' label (kicks off spec-ready-notify workflow)
+#   - Other statuses → apply corresponding phase label, remove stale phase labels
+#
+# When Milestone field changes → sync to issue milestone
+# When added to project → apply component label based on repo name
+
+name: Project Board → Issue Sync
+
+on:
+  projects_v2_item:
+    types: [edited, created]
+
+permissions:
+  contents: read
+  issues: write
+  organization-projects: read
+
+env:
+  PROJECT_NUMBER: 1
+
+jobs:
+  sync-status-to-labels:
+    runs-on: ubuntu-latest
+    # Skip if triggered by the sync bot itself (loop prevention)
+    if: github.event.action == 'edited' && github.actor != 'github-actions[bot]'
+    steps:
+      - name: Get item details and sync
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_SYNC_TOKEN }}
+          script: |
+            const itemNodeId = context.payload.projects_v2_item.node_id;
+            const changes = context.payload.changes;
+
+            // Fetch the full item with content (issue) and field values
+            const { node } = await github.graphql(`
+              query($itemId: ID!) {
+                node(id: $itemId) {
+                  ... on ProjectV2Item {
+                    content {
+                      ... on Issue {
+                        number
+                        repository { name owner { login } }
+                        labels(first: 50) { nodes { name } }
+                        milestone { title }
+                      }
+                    }
+                    fieldValues(first: 20) {
+                      nodes {
+                        ... on ProjectV2ItemFieldSingleSelectValue {
+                          name
+                          field { ... on ProjectV2SingleSelectField { name } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `, { itemId: itemNodeId });
+
+            const item = node;
+            const content = item.content;
+            if (!content || !content.number) {
+              core.info('Item is not an issue or has no content, skipping');
+              return;
+            }
+
+            const owner = content.repository.owner.login;
+            const repo = content.repository.name;
+            const issueNumber = content.number;
+            const currentLabels = content.labels.nodes.map(l => l.name);
+
+            // Extract field values
+            const fields = {};
+            for (const fv of item.fieldValues.nodes) {
+              if (fv.field && fv.name) {
+                fields[fv.field.name] = fv.name;
+              }
+            }
+
+            const status = fields['Status'];
+            const milestone = fields['Milestone'];
+
+            core.info(`Issue: ${owner}/${repo}#${issueNumber}`);
+            core.info(`Status: ${status}, Milestone: ${milestone}`);
+
+            // --- Status → Label sync ---
+            if (changes.field_value) {
+              const statusLabelMap = {
+                'Ready to Spec': 'ready-to-spec',
+                'Specifying': 'spec-in-progress',
+                'Spec Complete': 'spec-complete',
+                'Plan Complete': 'plan-complete',
+                'Tasks Complete': 'tasks-complete',
+                'Implementing': 'in-progress',
+                'Implementation Complete': 'implementation-complete',
+                'In Review': 'in-progress',
+                'Done': null,
+              };
+
+              const allPhaseLabels = [
+                'ready-to-spec', 'spec-in-progress', 'spec-complete',
+                'plan-complete', 'tasks-complete', 'in-progress',
+                'implementation-complete', 'blocked'
+              ];
+
+              const targetLabel = statusLabelMap[status];
+
+              // Remove stale phase labels
+              for (const label of allPhaseLabels) {
+                if (currentLabels.includes(label) && label !== targetLabel) {
+                  try {
+                    await github.rest.issues.removeLabel({
+                      owner, repo, issue_number: issueNumber, name: label,
+                    });
+                    core.info(`Removed label: ${label}`);
+                  } catch (e) {
+                    core.warning(`Could not remove label ${label}: ${e.message}`);
+                  }
+                }
+              }
+
+              // Apply target label
+              if (targetLabel && !currentLabels.includes(targetLabel)) {
+                await github.rest.issues.addLabels({
+                  owner, repo, issue_number: issueNumber, labels: [targetLabel],
+                });
+                core.info(`Applied label: ${targetLabel}`);
+              }
+
+              // Close issue when Done
+              if (status === 'Done') {
+                await github.rest.issues.update({
+                  owner, repo, issue_number: issueNumber, state: 'closed',
+                });
+                core.info('Closed issue (status: Done)');
+              }
+            }
+
+            // --- Milestone sync ---
+            if (milestone) {
+              // Find or create the milestone in the repo
+              const { data: milestones } = await github.rest.issues.listMilestones({
+                owner, repo, state: 'open',
+              });
+
+              let ms = milestones.find(m => m.title === milestone);
+              if (!ms) {
+                const { data: created } = await github.rest.issues.createMilestone({
+                  owner, repo, title: milestone,
+                });
+                ms = created;
+                core.info(`Created milestone: ${milestone}`);
+              }
+
+              if (content.milestone?.title !== milestone) {
+                await github.rest.issues.update({
+                  owner, repo, issue_number: issueNumber,
+                  milestone: ms.number,
+                });
+                core.info(`Set milestone: ${milestone}`);
+              }
+            }
+
+            // --- Component label (based on repo name) ---
+            const componentLabel = `component:${repo}`;
+            if (!currentLabels.includes(componentLabel)) {
+              try {
+                await github.rest.issues.addLabels({
+                  owner, repo, issue_number: issueNumber,
+                  labels: [componentLabel],
+                });
+                core.info(`Applied component label: ${componentLabel}`);
+              } catch (e) {
+                core.warning(`Could not apply component label: ${e.message}`);
+              }
+            }
+
+  # Job for newly created items — apply component label on add
+  sync-new-item:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'created' && github.actor != 'github-actions[bot]'
+    steps:
+      - name: Apply component label to new project item
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_SYNC_TOKEN }}
+          script: |
+            const itemNodeId = context.payload.projects_v2_item.node_id;
+
+            const { node } = await github.graphql(`
+              query($itemId: ID!) {
+                node(id: $itemId) {
+                  ... on ProjectV2Item {
+                    content {
+                      ... on Issue {
+                        number
+                        repository { name owner { login } }
+                        labels(first: 50) { nodes { name } }
+                      }
+                    }
+                  }
+                }
+              }
+            `, { itemId: itemNodeId });
+
+            const content = node?.content;
+            if (!content?.number) return;
+
+            const owner = content.repository.owner.login;
+            const repo = content.repository.name;
+            const componentLabel = `component:${repo}`;
+            const currentLabels = content.labels.nodes.map(l => l.name);
+
+            if (!currentLabels.includes(componentLabel)) {
+              try {
+                await github.rest.issues.addLabels({
+                  owner, repo, issue_number: content.number,
+                  labels: [componentLabel],
+                });
+                core.info(`Applied ${componentLabel} to ${owner}/${repo}#${content.number}`);
+              } catch (e) {
+                core.warning(`Could not apply component label: ${e.message}`);
+              }
+            }
