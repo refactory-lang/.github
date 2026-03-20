@@ -46,6 +46,7 @@
 | Repository | Description |
 |-----------|-------------|
 | [`refactory-template`](https://github.com/refactory-lang/refactory-template) | Common config template (speckit, Claude/agents, MCP) for all repos |
+| [`config-agent`](https://github.com/refactory-lang/config-agent) | Shared agent config (submodule) — speckit templates, commands, skills, GitHub agents |
 | [`config-typescript`](https://github.com/refactory-lang/config-typescript) | Shared TypeScript toolchain config — tsconfig, oxlint, oxfmt base configs |
 | [`config-python`](https://github.com/refactory-lang/config-python) | Shared Python toolchain config — ruff, mypy, pytest conventions |
 | [`config-rust`](https://github.com/refactory-lang/config-rust) | Shared Rust toolchain config — rustfmt, clippy, Cargo workspace conventions |
