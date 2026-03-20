@@ -82,7 +82,7 @@ jobs:
             }
 
             const status = fields['Status'];
-            const milestone = fields['Milestone'];
+            const milestone = fields['Milestone Stage'];
 
             core.info(`Issue: ${owner}/${repo}#${issueNumber}`);
             core.info(`Status: ${status}, Milestone: ${milestone}`);
@@ -90,7 +90,7 @@ jobs:
             // --- Status → Label sync ---
             if (changes.field_value) {
               const statusLabelMap = {
-                'Ready to Spec': 'ready-to-spec',
+                'Spec Ready': 'ready-to-spec',
                 'Specifying': 'spec-in-progress',
                 'Spec Complete': 'spec-complete',
                 'Plan Complete': 'plan-complete',
