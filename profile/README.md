@@ -23,7 +23,8 @@
 | [`rust-ir`](https://github.com/refactory-lang/rust-ir) | Typed Rust IR builder for JSSG transforms — grammar-faithful, render-then-validate | Milestone 1 |
 | [`grammar-types`](https://github.com/refactory-lang/grammar-types) | Language-agnostic type projection from tree-sitter grammars to typed IR builders | Milestone 1 |
 | [`ir-codegen`](https://github.com/refactory-lang/ir-codegen) | Code generator — reads tree-sitter grammars, generates builder factories + renderers + tests | Milestone 1 |
-| [`python-annotate`](https://github.com/refactory-lang/python-annotate) | Step 2 Type Infer CLI — pyright → annotate → mypy --strict (Python-specific) | Milestone 1 |
+| [`python-annotate`](https://github.com/refactory-lang/python-annotate) | Step 2 Type Infer — hybrid: JSSG symbol resolution (ruff) + pyright oracle + annotation insertion + mypy verify | Milestone 1 |
+| [`ai-coding-lang-bench`](https://github.com/refactory-lang/ai-coding-lang-bench) | Benchmark programme: 8 experiments measuring reviewability gap, pipeline economics, thinking clusters | Milestone 1 |
 
 ### Shadow Libraries
 
@@ -65,7 +66,7 @@ flowchart LR
     end
 
     subgraph S2 ["Step 2: Type Infer"]
-        TINFER["2.0 Type Infer\npyright → annotate → mypy"]
+        TINFER["2.0 Type Infer (hybrid)\nJSSG: identify sites (ruff/oxc)\nOracle: pyright / tsgo\nVerify: mypy / tsgo --strict"]
     end
 
     subgraph S3 ["Step 3: Validate"]
@@ -100,7 +101,7 @@ flowchart LR
 1. **Step 1: Normalize** — Rewrite idiomatic source to profile-compliant form
    - **1.1 Normalize-Det** — Deterministic rewrites (`try/except` → `Result`, `throw` → `Err`, etc.)
    - **1.2 Normalize-LLM** — LLM-assisted normalization for complex patterns (class → readonly interface)
-2. **Step 2: Type Infer** — Run `pyright` → `refactory-annotate` → `mypy --strict` to ensure full type coverage before validation
+2. **Step 2: Type Infer** *(hybrid)* — JSSG transforms identify unannotated sites (Codemod semantic analysis via ruff/oxc), type oracles infer annotations (pyright for Python, tsgo for TS), CLI inserts them, verifier confirms (mypy/tsgo --strict)
 3. **Step 3: Validate** — ast-grep profile validator confirms all code is profile-compliant before translation
 4. **Step 4: Translate** — Convert profile-compliant source to Rust
    - **4.1 Translate-Syntax** — Deterministic syntax mapping via JSSG (types, structs, functions, imports)
